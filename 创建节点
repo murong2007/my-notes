@@ -1,0 +1,82 @@
+一、 创建工作空间与功能包
+打开终端，依次执行以下命令：
+
+# 1. 创建并进入工作空间的 src 目录
+mkdir -p ~/ros2_ws/src
+cd ~/ros2_ws/src
+
+# 2. 创建 C++ 功能包 (包名为 my_cpp_pkg，依赖 rclcpp)
+ros2 pkg create --build-type ament_cmake my_cpp_pkg --dependencies rclcpp
+
+二、 编写节点源代码
+在 VS Code 左侧资源管理器中，进入 src/my_cpp_pkg/src/ 目录。
+新建文件 hello_node.cpp。
+
+// 1. 引入 ROS 2 的 C++ 客户端库
+#include "rclcpp/rclcpp.hpp"
+// 2. 定义一个类，继承自 rclcpp::Node
+class MyNode : public rclcpp::Node {
+public:
+    // 构造函数
+    MyNode() : Node("hello_node") { 
+        // 初始化父类 Node，并给节点命名为 "hello_node"
+        // 创建一个定时器，每 1000 毫秒（1秒）执行一次 timer_callback 函数
+        timer_ = this->create_wall_timer(
+            std::chrono::seconds(1),
+            std::bind(&MyNode::timer_callback, this));
+        // 打印一条日志信息 (INFO 级别)
+        RCLCPP_INFO(this->get_logger(), "Hello, ROS 2! 节点已启动。");
+    }
+private:
+    // 定时器回调函数
+    void timer_callback() {
+        RCLCPP_INFO(this->get_logger(), "节点正在运行中...");
+    }
+    // 声明定时器指针
+    rclcpp::TimerBase::SharedPtr timer_;
+};
+// 3. 主函数
+int main(int argc, char *argv[]) {
+    // 初始化 ROS 2 客户端
+    rclcpp::init(argc, argv);
+    // 创建 MyNode 对象的共享指针 (自动管理内存)
+    auto node = std::make_shared<MyNode>();
+    // 让节点进入自旋状态（保持运行，等待回调）
+    rclcpp::spin(node);
+    // 关闭 ROS 2 客户端
+    rclcpp::shutdown();
+    return 0;
+}
+
+三、 配置 CMakeLists.txt 
+打开 src/my_cpp_pkg/CMakeLists.txt，翻到最下面，在 if(BUILD_TESTING) 和 ament_package() 之间，添加以下代码：
+
+# 1. 告诉编译器：把 src/hello_node.cpp 编译成名为 hello_node 的可执行文件
+add_executable(hello_node src/hello_node.cpp)
+
+# 2. 告诉编译器：这个节点用到了 rclcpp 库（自动配置头文件和链接库）
+ament_target_dependencies(hello_node rclcpp)
+
+# 3. 安装规则：编译好后放到指定位置，这样 ros2 run 才能找到它
+install(TARGETS
+  hello_node
+  DESTINATION lib/${PROJECT_NAME}
+)
+💡 避坑指南：
+add_executable 后面的名字（hello_node），必须和下面两行里的名字完全一模一样。
+文件路径 src/hello_node.cpp 必须和文件实际位置对应。
+
+四、 编译与运行
+回到终端（可以在 VS Code 里按 Ctrl + ` 打开）：
+
+# 1. 回到工作空间根目录 (注意是 ros2_ws，不是 src)
+cd ~/ros2_ws
+
+# 2. 编译工作空间 (这会自动调用 CMake)
+colcon build
+
+# 3. 刷新环境变量 (让终端认识你刚刚编译好的包)
+source install/setup.bash
+
+# 4. 运行节点
+ros2 run my_cpp_pkg hello_node
